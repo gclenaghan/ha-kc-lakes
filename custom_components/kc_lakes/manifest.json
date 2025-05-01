@@ -1,0 +1,12 @@
+{
+    "domain": "kc_lakes",
+    "name": "King County Lake Buoy Data",
+    "documentation": "https://github.com/gclenaghan/ha-kc-lakes",
+    "dependencies": [],
+    "codeowners": ["@gclenaghan"],
+    "requirements": ["aiohttp"],
+    "iot_class": "cloud_polling",
+    "version": "0.1.0",
+    "config_flow": true
+}
+  
