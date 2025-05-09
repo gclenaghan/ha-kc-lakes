@@ -1,4 +1,5 @@
 """Config flow for King County Lakes Buoy integration."""
+
 import logging
 from typing import Any
 
@@ -14,9 +15,9 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class KCLakesConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Handle a config flow for King County Lakes Buoy."""
+    """Handle a config flow for King County Lake Buoy Data."""
 
-    VERSION = 1 # Config flow version
+    VERSION = 1  # Config flow version
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -26,16 +27,16 @@ class KCLakesConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             # Input is valid, create the config entry
-            _LOGGER.info("Creating config entry for King County Lakes")
+            _LOGGER.info("Creating config entry for King County Lake Buoy Integration")
             return self.async_create_entry(
-                title="King County Lakes", # Title shown in the UI integrations list
-                data={} # No data needed to store for this simple case
+                title="King County Lake Buoy",  # Title shown in the UI integrations list
+                data={},  # No data needed to store for this simple case
             )
 
         return self.async_show_form(
             step_id="user",
-            data_schema=vol.Schema({}), # No fields required
+            data_schema=vol.Schema({}),  # No fields required
             description_placeholders={
-                 "api_url": "https://green2.kingcounty.gov/lake-buoy/GenerateMapData.aspx"
-             }
+                "api_url": "https://green2.kingcounty.gov/lake-buoy/GenerateMapData.aspx"
+            },
         )

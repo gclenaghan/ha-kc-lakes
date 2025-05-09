@@ -33,7 +33,7 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 
-class KCLakesDataUpdateCoordinator(DataUpdateCoordinator[Dict[str, Any]]):
+class KCLakeBuoyDataUpdateCoordinator(DataUpdateCoordinator[Dict[str, Any]]):
     """Class to manage fetching King County Lakes data."""
 
     def __init__(self, hass: HomeAssistant, session: ClientSession):
@@ -78,7 +78,8 @@ class KCLakesDataUpdateCoordinator(DataUpdateCoordinator[Dict[str, Any]]):
             if len(lake_str_columns) < 10 or lake_str_columns[9] != "Y":
                 continue
             pacific_zone = ZoneInfo("America/Los_Angeles")
-            processed_data[lake_str_columns[0]] = {
+            lake_name = "Lake " + lake_str_columns[0]
+            processed_data[lake_name] = {
                 KEY_WEATHER_LAST_UPDATE: parse(lake_str_columns[1]).replace(
                     tzinfo=pacific_zone
                 ),

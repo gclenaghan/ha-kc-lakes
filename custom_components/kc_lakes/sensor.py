@@ -29,7 +29,7 @@ from .const import (
     KEY_BUOY_LATITUDE,
     KEY_BUOY_LONGITUDE,
 )
-from .coordinator import KCLakesDataUpdateCoordinator
+from .coordinator import KCLakeBuoyDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -41,7 +41,7 @@ LAKE_SENSORS = [
         "Weather Last Update",
         None,
         SensorDeviceClass.TIMESTAMP,
-        SensorStateClass.MEASUREMENT,
+        None,
         "mdi:clock-outline",
     ),
     (
@@ -81,7 +81,7 @@ LAKE_SENSORS = [
         "Water Last Update",
         None,
         SensorDeviceClass.TIMESTAMP,
-        SensorStateClass.MEASUREMENT,
+        None,
         "mdi:clock-outline",
     ),
     (
@@ -109,7 +109,7 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up sensor entities."""
-    coordinator: KCLakesDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator: KCLakeBuoyDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
 
     # Create sensors only after the first successful coordinator update
     @callback
@@ -166,7 +166,7 @@ async def async_setup_entry(
         coordinator.async_add_listener(_async_create_entities)
 
 
-class KCLakeSensor(CoordinatorEntity[KCLakesDataUpdateCoordinator], SensorEntity):
+class KCLakeSensor(CoordinatorEntity[KCLakeBuoyDataUpdateCoordinator], SensorEntity):
     """Representation of a King County Lake Buoy Sensor."""
 
     _attr_attribution = ATTRIBUTION
@@ -174,7 +174,7 @@ class KCLakeSensor(CoordinatorEntity[KCLakesDataUpdateCoordinator], SensorEntity
 
     def __init__(
         self,
-        coordinator: KCLakesDataUpdateCoordinator,
+        coordinator: KCLakeBuoyDataUpdateCoordinator,
         config_entry_id: str,
         lake_name: str,
         data_key: str,
@@ -201,8 +201,6 @@ class KCLakeSensor(CoordinatorEntity[KCLakesDataUpdateCoordinator], SensorEntity
         self._attr_device_info = {
             "identifiers": {(DOMAIN, lake_name)},
             "name": lake_name,
-            "manufacturer": "King County",
-            "model": "Lake Buoy",
             "via_device": (
                 DOMAIN,
                 config_entry_id,
