@@ -1,4 +1,4 @@
-# ha-kc-lakes
+# King County Lakes Buoy Data
 
 This is a home assistant integration which takes data from King County's lake buoy, including water and air temperature. I use it to decide whether its a good day for paddleboarding/swimming around the start and end of summer.
 
