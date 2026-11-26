@@ -1,0 +1,38 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "King County Lakes Buoy Data",
+        "description": "Set up polling for King County lake profiling buoys ({api_url})."
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "water_temperature": {
+        "name": "Water Temperature"
+      },
+      "air_temperature": {
+        "name": "Air Temperature"
+      },
+      "wind_speed": {
+        "name": "Wind Speed"
+      },
+      "wind_direction": {
+        "name": "Wind Direction"
+      },
+      "weather_last_update": {
+        "name": "Weather Last Update"
+      },
+      "water_last_update": {
+        "name": "Water Last Update"
+      },
+      "buoy_latitude": {
+        "name": "Buoy Latitude"
+      },
+      "buoy_longitude": {
+        "name": "Buoy Longitude"
+      }
+    }
+  }
+}

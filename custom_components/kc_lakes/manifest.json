@@ -1,17 +1,15 @@
 {
-    "domain": "kc_lakes",
-    "name": "King County Lake Buoy Data",
-    "documentation": "https://github.com/gclenaghan/ha-kc-lakes",
-    "issue_tracker": "https://github.com/gclenaghan/ha-kc-lakes/issues",
-    "dependencies": [],
-    "codeowners": [
-        "@gclenaghan"
-    ],
-    "requirements": [
-        "aiohttp"
-    ],
-    "iot_class": "cloud_polling",
-    "version": "0.1.0",
-    "config_flow": true,
-    "integration_type": "hub"
+  "domain": "kc_lakes",
+  "name": "King County Lakes Buoy Data",
+  "codeowners": [
+    "@gclenaghan"
+  ],
+  "config_flow": true,
+  "documentation": "https://github.com/gclenaghan/ha-kc-lakes",
+  "integration_type": "service",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/gclenaghan/ha-kc-lakes/issues",
+  "requirements": [],
+  "single_config_entry": true,
+  "version": "0.1.0"
 }

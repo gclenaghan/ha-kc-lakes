@@ -1,42 +1,33 @@
-"""Config flow for King County Lakes Buoy integration."""
+"""Config flow for the King County Lakes Buoy Data integration."""
 
-import logging
+from __future__ import annotations
+
 from typing import Any
 
 import voluptuous as vol
 
-from homeassistant import config_entries
-from homeassistant.core import HomeAssistant
-from homeassistant.data_entry_flow import FlowResult
+from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
 
-from .const import DOMAIN
-
-_LOGGER = logging.getLogger(__name__)
+from .const import BUOY_MAP_URL, DEFAULT_NAME, DOMAIN
 
 
-class KCLakesConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Handle a config flow for King County Lake Buoy Data."""
+class KCLakesConfigFlow(ConfigFlow, domain=DOMAIN):
+    """Handle a config flow for King County Lakes Buoy Data."""
 
-    VERSION = 1  # Config flow version
+    VERSION = 1
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    ) -> ConfigFlowResult:
+        """Handle the initial step."""
         if self._async_current_entries():
             return self.async_abort(reason="single_instance_allowed")
 
         if user_input is not None:
-            # Input is valid, create the config entry
-            _LOGGER.info("Creating config entry for King County Lake Buoy Integration")
-            return self.async_create_entry(
-                title="King County Lake Buoy",  # Title shown in the UI integrations list
-                data={},  # No data needed to store for this simple case
-            )
+            return self.async_create_entry(title=DEFAULT_NAME, data={})
 
         return self.async_show_form(
             step_id="user",
-            data_schema=vol.Schema({}),  # No fields required
-            description_placeholders={
-                "api_url": "https://green2.kingcounty.gov/lake-buoy/GenerateMapData.aspx"
-            },
+            data_schema=vol.Schema({}),
+            description_placeholders={"api_url": BUOY_MAP_URL},
         )
