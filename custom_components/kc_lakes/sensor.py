@@ -1,236 +1,182 @@
+"""Sensor platform for King County Lakes Buoy Data."""
+
+from __future__ import annotations
+
+from datetime import datetime
 import logging
-from typing import Any, Dict, Optional
 
 from homeassistant.components.sensor import (
-    SensorEntity,
     SensorDeviceClass,
+    SensorEntity,
+    SensorEntityDescription,
     SensorStateClass,
 )
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import DEGREE, EntityCategory, UnitOfSpeed, UnitOfTemperature
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.typing import StateType
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
-from homeassistant.const import (
-    UnitOfTemperature,
-    UnitOfSpeed,
-    FORMAT_TIME,
-    DEGREE,
-)
 
+from . import KCLakesConfigEntry
 from .const import (
-    DOMAIN,
     ATTRIBUTION,
-    KEY_WEATHER_LAST_UPDATE,
+    BUOY_MAP_URL,
+    DOMAIN,
     KEY_AIR_TEMPERATURE,
-    KEY_WIND_SPEED,
-    KEY_WIND_DIRECTION,
-    KEY_WATER_TEMPERATURE,
-    KEY_WATER_LAST_UPDATE,
     KEY_BUOY_LATITUDE,
     KEY_BUOY_LONGITUDE,
+    KEY_WATER_LAST_UPDATE,
+    KEY_WATER_TEMPERATURE,
+    KEY_WEATHER_LAST_UPDATE,
+    KEY_WIND_DIRECTION,
+    KEY_WIND_SPEED,
 )
 from .coordinator import KCLakeBuoyDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
-# Define sensors for each lake. Adjust keys based on API and const.py
-# Format: (key_in_api_data, name_suffix, unit, device_class, state_class, icon)
-LAKE_SENSORS = [
-    (
-        KEY_WEATHER_LAST_UPDATE,
-        "Weather Last Update",
-        None,
-        SensorDeviceClass.TIMESTAMP,
-        None,
-        "mdi:clock-outline",
+LAKE_SENSORS: tuple[SensorEntityDescription, ...] = (
+    SensorEntityDescription(
+        key=KEY_WATER_TEMPERATURE,
+        translation_key="water_temperature",
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        device_class=SensorDeviceClass.TEMPERATURE,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=2,
+        icon="mdi:water-thermometer",
     ),
-    (
-        KEY_AIR_TEMPERATURE,
-        "Air Temperature",
-        UnitOfTemperature.CELSIUS,
-        SensorDeviceClass.TEMPERATURE,
-        SensorStateClass.MEASUREMENT,
-        "mdi:thermometer",
+    SensorEntityDescription(
+        key=KEY_AIR_TEMPERATURE,
+        translation_key="air_temperature",
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        device_class=SensorDeviceClass.TEMPERATURE,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+        icon="mdi:thermometer",
     ),
-    (
-        KEY_WIND_SPEED,
-        "Wind Speed",
-        UnitOfSpeed.METERS_PER_SECOND,
-        SensorDeviceClass.WIND_SPEED,
-        SensorStateClass.MEASUREMENT,
-        "mdi:weather-windy",
+    SensorEntityDescription(
+        key=KEY_WIND_SPEED,
+        translation_key="wind_speed",
+        native_unit_of_measurement=UnitOfSpeed.METERS_PER_SECOND,
+        device_class=SensorDeviceClass.WIND_SPEED,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+        icon="mdi:weather-windy",
     ),
-    (
-        KEY_WIND_DIRECTION,
-        "Wind Direction",
-        None,
-        None,
-        None,
-        "mdi:compass-outline",
+    SensorEntityDescription(
+        key=KEY_WIND_DIRECTION,
+        translation_key="wind_direction",
+        icon="mdi:compass-outline",
     ),
-    (
-        KEY_WATER_TEMPERATURE,
-        "Water Temperature",
-        UnitOfTemperature.CELSIUS,
-        SensorDeviceClass.TEMPERATURE,
-        SensorStateClass.MEASUREMENT,
-        "mdi:water-thermometer",
+    SensorEntityDescription(
+        key=KEY_WEATHER_LAST_UPDATE,
+        translation_key="weather_last_update",
+        device_class=SensorDeviceClass.TIMESTAMP,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:clock-outline",
     ),
-    (
-        KEY_WATER_LAST_UPDATE,
-        "Water Last Update",
-        None,
-        SensorDeviceClass.TIMESTAMP,
-        None,
-        "mdi:clock-outline",
+    SensorEntityDescription(
+        key=KEY_WATER_LAST_UPDATE,
+        translation_key="water_last_update",
+        device_class=SensorDeviceClass.TIMESTAMP,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:clock-outline",
     ),
-    (
-        KEY_BUOY_LATITUDE,
-        "Buoy Latitude",
-        DEGREE,
-        None,
-        SensorStateClass.MEASUREMENT_ANGLE,
-        "mdi:latitude",
+    SensorEntityDescription(
+        key=KEY_BUOY_LATITUDE,
+        translation_key="buoy_latitude",
+        native_unit_of_measurement=DEGREE,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        suggested_display_precision=5,
+        icon="mdi:latitude",
     ),
-    (
-        KEY_BUOY_LONGITUDE,
-        "Buoy Longitude",
-        DEGREE,
-        None,
-        SensorStateClass.MEASUREMENT_ANGLE,
-        "mdi:longitude",
+    SensorEntityDescription(
+        key=KEY_BUOY_LONGITUDE,
+        translation_key="buoy_longitude",
+        native_unit_of_measurement=DEGREE,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        suggested_display_precision=5,
+        icon="mdi:longitude",
     ),
-]
+)
 
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: KCLakesConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up sensor entities."""
-    coordinator: KCLakeBuoyDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
+    """Set up King County Lakes buoy sensor entities."""
+    coordinator = entry.runtime_data
+    known_lakes: set[str] = set()
 
-    # Create sensors only after the first successful coordinator update
     @callback
-    def _async_create_entities():
-        """Create entities once coordinator data is available."""
-        if not coordinator.last_update_success or not coordinator.data:
-            _LOGGER.warning("Coordinator has no data, skipping sensor setup")
-            return  # Don't create entities if the initial fetch failed
+    def _async_add_new_lakes() -> None:
+        """Create entities for any newly discovered active lake buoys."""
+        if not coordinator.data:
+            return
 
-        new_entities = []
-        # coordinator.data is expected to be a dict: {lake_name: lake_data_dict}
-        for lake_name, lake_data in coordinator.data.items():
-            _LOGGER.debug("Setting up sensors for lake: %s", lake_name)
-            for (
-                data_key,
-                name_suffix,
-                unit,
-                dev_class,
-                state_class,
-                icon,
-            ) in LAKE_SENSORS:
-                if data_key in lake_data:  # Only create sensor if data exists
-                    new_entities.append(
-                        KCLakeSensor(
-                            coordinator,
-                            entry.entry_id,
-                            lake_name,
-                            data_key,
-                            name_suffix,
-                            unit,
-                            dev_class,
-                            state_class,
-                            icon,
-                        )
-                    )
-                else:
-                    _LOGGER.debug(
-                        "Data key '%s' not found for lake '%s'", data_key, lake_name
-                    )
-
-        if new_entities:
-            _LOGGER.info("Adding %d King County Lake sensors", len(new_entities))
-            async_add_entities(new_entities)
-        else:
-            _LOGGER.warning(
-                "No sensors could be created. Check API response and LAKE_SENSORS definition."
+        new_entities: list[KCLakeSensor] = []
+        for lake_name in coordinator.data:
+            if lake_name in known_lakes:
+                continue
+            known_lakes.add(lake_name)
+            _LOGGER.debug("Adding buoy sensors for %s", lake_name)
+            new_entities.extend(
+                KCLakeSensor(coordinator, entry.entry_id, lake_name, description)
+                for description in LAKE_SENSORS
             )
 
-    # Check if data is already available (e.g., after HA restart)
-    if coordinator.data:
-        _async_create_entities()
-    else:
-        # Listen for the first successful update to create entities
-        coordinator.async_add_listener(_async_create_entities)
+        if new_entities:
+            async_add_entities(new_entities)
+
+    _async_add_new_lakes()
+    entry.async_on_unload(coordinator.async_add_listener(_async_add_new_lakes))
 
 
 class KCLakeSensor(CoordinatorEntity[KCLakeBuoyDataUpdateCoordinator], SensorEntity):
-    """Representation of a King County Lake Buoy Sensor."""
+    """Representation of a King County Lake Buoy sensor."""
 
     _attr_attribution = ATTRIBUTION
-    _attr_has_entity_name = True  # Use "Platform Name Sensor Name" format
+    _attr_has_entity_name = True
 
     def __init__(
         self,
         coordinator: KCLakeBuoyDataUpdateCoordinator,
         config_entry_id: str,
         lake_name: str,
-        data_key: str,
-        name_suffix: str,
-        unit: Optional[str],
-        device_class: Optional[SensorDeviceClass],
-        state_class: Optional[SensorStateClass],
-        icon: Optional[str],
-    ):
+        description: SensorEntityDescription,
+    ) -> None:
         """Initialize the sensor."""
         super().__init__(coordinator)
+        self.entity_description = description
         self._lake_name = lake_name
-        self._data_key = data_key
-
-        # Entity Properties
-        self._attr_unique_id = f"{config_entry_id}_{lake_name}_{data_key}"
-        self._attr_name = name_suffix  # Will be combined with device name
-        self._attr_native_unit_of_measurement = unit
-        self._attr_device_class = device_class
-        self._attr_state_class = state_class
-        self._attr_icon = icon
-
-        # Device Info: Groups sensors by lake
-        self._attr_device_info = {
-            "identifiers": {(DOMAIN, lake_name)},
-            "name": lake_name,
-            "via_device": (
-                DOMAIN,
-                config_entry_id,
-            ),  # Links device to the integration config entry
-        }
-        self._update_state()  # Set initial state
+        self._attr_unique_id = f"{config_entry_id}_{lake_name}_{description.key}"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, lake_name)},
+            name=lake_name,
+            manufacturer="King County",
+            model="Lake Profiling Buoy",
+            entry_type=DeviceEntryType.SERVICE,
+            configuration_url=BUOY_MAP_URL,
+        )
 
     @property
     def available(self) -> bool:
-        """Return True if entity is available."""
-        # Available if coordinator has data AND this specific lake's data is present
+        """Return True if the coordinator succeeded and this lake is active."""
         return (
-            super().available  # Checks coordinator status
+            super().available
             and self.coordinator.data is not None
             and self._lake_name in self.coordinator.data
-            and self._data_key in self.coordinator.data[self._lake_name]
         )
 
-    @callback
-    def _handle_coordinator_update(self) -> None:
-        """Handle updated data from the coordinator."""
-        if self.coordinator.data and self._lake_name in self.coordinator.data:
-            self._update_state()
-            self.async_write_ha_state()
-        else:
-            # Mark as unavailable if lake data disappears
-            self._attr_native_value = None
-            self.async_write_ha_state()
-
-    def _update_state(self) -> None:
-        """Update the sensor state from coordinator data."""
-        lake_data = self.coordinator.data.get(self._lake_name, {})
-        self._attr_native_value = lake_data.get(self._data_key)
+    @property
+    def native_value(self) -> StateType | datetime:
+        """Return the latest sensor reading from coordinator data."""
+        if not self.coordinator.data:
+            return None
+        lake_data = self.coordinator.data.get(self._lake_name)
+        if lake_data is None:
+            return None
+        return lake_data.get(self.entity_description.key)

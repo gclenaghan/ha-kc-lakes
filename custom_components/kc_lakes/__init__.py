@@ -1,51 +1,40 @@
+"""The King County Lakes Buoy Data integration."""
+
+from __future__ import annotations
+
 import logging
 
-from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import Platform
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .const import DOMAIN, PLATFORMS
 from .coordinator import KCLakeBuoyDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
+PLATFORMS: list[Platform] = [Platform.SENSOR]
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up from a config entry."""
-    _LOGGER.info(
-        "Setting up King County Lake Buoy integration (Entry ID: %s)", entry.entry_id
+type KCLakesConfigEntry = ConfigEntry[KCLakeBuoyDataUpdateCoordinator]
+
+
+async def async_setup_entry(hass: HomeAssistant, entry: KCLakesConfigEntry) -> bool:
+    """Set up King County Lakes Buoy Data from a config entry."""
+    _LOGGER.debug(
+        "Setting up King County Lakes Buoy Data integration (entry_id=%s)",
+        entry.entry_id,
     )
 
     session = async_get_clientsession(hass)
-    coordinator = KCLakeBuoyDataUpdateCoordinator(hass, session)
-
-    # Fetch initial data so we have it when platforms are set up
+    coordinator = KCLakeBuoyDataUpdateCoordinator(hass, entry, session)
     await coordinator.async_config_entry_first_refresh()
 
-    hass.data.setdefault(DOMAIN, {})
-    hass.data[DOMAIN][entry.entry_id] = coordinator
+    entry.runtime_data = coordinator
 
-    # Set up platforms (sensor, etc.)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-
-    _LOGGER.info("King County Lake Buoy integration setup complete")
     return True
 
 
-async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Unload a config entry."""
-    _LOGGER.info(
-        "Unloading King County Lake Buoy integration (Entry ID: %s)", entry.entry_id
-    )
-
-    # Unload platforms
-    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
-
-    # Clean up data
-    if unload_ok:
-        hass.data[DOMAIN].pop(entry.entry_id)
-        if not hass.data[DOMAIN]:  # Remove domain data if it's the last entry
-            hass.data.pop(DOMAIN)
-        _LOGGER.info("King County Lake Buoy integration unload complete")
-
-    return unload_ok
+async def async_unload_entry(hass: HomeAssistant, entry: KCLakesConfigEntry) -> bool:
+    """Unload a King County Lakes Buoy Data config entry."""
+    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)

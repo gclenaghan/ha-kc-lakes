@@ -1,98 +1,67 @@
-"""DataUpdateCoordinator for King County Lakes."""
+"""DataUpdateCoordinator for King County Lakes Buoy Data."""
 
+from __future__ import annotations
+
+import asyncio
+from datetime import UTC
 import logging
-import async_timeout
-from dateutil.parser import parse
-from datetime import tzinfo
-from typing import Dict, Any
-from zoneinfo import ZoneInfo
+from typing import Any
 
-from aiohttp import ClientSession, ClientError, ClientResponseError
+from aiohttp import ClientError, ClientResponseError, ClientSession
 
-from homeassistant.helpers.update_coordinator import (
-    DataUpdateCoordinator,
-    UpdateFailed,
-)
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.util import dt as dt_util
 
-from .const import (
-    DOMAIN,
-    API_URL,
-    API_TIMEOUT,
-    SCAN_INTERVAL,
-    KEY_WEATHER_LAST_UPDATE,
-    KEY_AIR_TEMPERATURE,
-    KEY_WIND_SPEED,
-    KEY_WIND_DIRECTION,
-    KEY_WATER_TEMPERATURE,
-    KEY_WATER_LAST_UPDATE,
-    KEY_BUOY_LATITUDE,
-    KEY_BUOY_LONGITUDE,
-)
+from .const import API_TIMEOUT, API_URL, DOMAIN, PACIFIC_TIMEZONE, SCAN_INTERVAL
+from .parser import parse_buoy_data
 
 _LOGGER = logging.getLogger(__name__)
 
 
-class KCLakeBuoyDataUpdateCoordinator(DataUpdateCoordinator[Dict[str, Any]]):
-    """Class to manage fetching King County Lakes data."""
+class KCLakeBuoyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
+    """Coordinator to manage fetching King County Lakes buoy data."""
 
-    def __init__(self, hass: HomeAssistant, session: ClientSession):
-        self.session = session
+    config_entry: ConfigEntry
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        config_entry: ConfigEntry,
+        session: ClientSession,
+    ) -> None:
+        """Initialize the coordinator."""
         super().__init__(
             hass,
             _LOGGER,
+            config_entry=config_entry,
             name=DOMAIN,
             update_interval=SCAN_INTERVAL,
         )
+        self.session = session
 
-    async def _async_update_data(self) -> Dict[str, Any]:
-        """Fetch data from API endpoint."""
+    async def _async_update_data(self) -> dict[str, dict[str, Any]]:
+        """Fetch and parse data from the King County Lake Buoy endpoint."""
         try:
-            async with async_timeout.timeout(API_TIMEOUT):
-                response = await self.session.get(API_URL)
-                response.raise_for_status()  # Raise exception for bad status codes (4xx or 5xx)
-                # Assuming the API returns a list of dictionaries, one for each lake/buoy
+            async with (
+                asyncio.timeout(API_TIMEOUT),
+                self.session.get(API_URL) as response,
+            ):
+                response.raise_for_status()
                 raw_data = await response.text()
-
-                return self.parse_buoy_data(raw_data)
-
+        except TimeoutError as err:
+            raise UpdateFailed(
+                "Timeout communicating with King County Lake Buoy API"
+            ) from err
         except ClientResponseError as err:
-            _LOGGER.error("HTTP error fetching data: %s - %s", err.status, err.message)
-            raise UpdateFailed(f"Error communicating with API: {err}") from err
+            raise UpdateFailed(
+                f"HTTP error {err.status} from King County Lake Buoy API: {err.message}"
+            ) from err
         except ClientError as err:
-            _LOGGER.error("Client error fetching data: %s", err)
-            raise UpdateFailed(f"Error communicating with API: {err}") from err
-        except TimeoutError:
-            _LOGGER.error("Timeout fetching data")
-            raise UpdateFailed("Timeout communicating with API") from TimeoutError
-        except Exception as err:
-            _LOGGER.exception(
-                "Unexpected error fetching data"
-            )  # Logs the full traceback
-            raise UpdateFailed(f"Unexpected error: {err}") from err
+            raise UpdateFailed(
+                f"Error communicating with King County Lake Buoy API: {err}"
+            ) from err
 
-    def parse_buoy_data(self, raw_data):
-        processed_data = {}
-        for lake_raw_data in raw_data.split("^|"):
-            lake_str_columns = lake_raw_data.split("|\t")
-            if len(lake_str_columns) < 10 or lake_str_columns[9] != "Y":
-                continue
-            pacific_zone = ZoneInfo("America/Los_Angeles")
-            lake_name = "Lake " + lake_str_columns[0]
-            processed_data[lake_name] = {
-                KEY_WEATHER_LAST_UPDATE: parse(lake_str_columns[1]).replace(
-                    tzinfo=pacific_zone
-                ),
-                KEY_AIR_TEMPERATURE: float(lake_str_columns[2]),
-                KEY_WIND_SPEED: float(lake_str_columns[3]),
-                KEY_WIND_DIRECTION: lake_str_columns[4][
-                    5:
-                ],  # [5:] removes the "from " prefix
-                KEY_WATER_TEMPERATURE: float(lake_str_columns[5]),
-                KEY_WATER_LAST_UPDATE: parse(lake_str_columns[6]).replace(
-                    tzinfo=pacific_zone
-                ),
-                KEY_BUOY_LATITUDE: float(lake_str_columns[7]),
-                KEY_BUOY_LONGITUDE: float(lake_str_columns[8]),
-            }
-        return processed_data
+        pacific_tz = dt_util.get_time_zone(PACIFIC_TIMEZONE) or UTC
+        return parse_buoy_data(raw_data, pacific_tz)
