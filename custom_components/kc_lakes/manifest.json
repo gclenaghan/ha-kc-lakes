@@ -1,6 +1,10 @@
 {
   "domain": "kc_lakes",
   "name": "King County Lakes Buoy Data",
+  "categories": [
+    "weather_alerts",
+    "local_services"
+  ],
   "codeowners": [
     "@gclenaghan"
   ],
